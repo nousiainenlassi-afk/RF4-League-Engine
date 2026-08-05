@@ -1,29 +1,51 @@
 """Domain models for RF4 League Engine."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 from typing import List
 
 
 @dataclass
-class Team:
-    id: int
+class Player:
+    """Represent a player participating in the RF4 League."""
+
+    team: str
     name: str
-    coach: str | None = None
+    map_points: List[int]
 
 
 @dataclass
 class Match:
-    home_team: Team
-    away_team: Team
-    date: date
-    venue: str
-    score_home: int | None = None
-    score_away: int | None = None
+    """Represent a league match and its map-level results."""
+
+    home_team: str
+    away_team: str
+    maps: List[str]
+    result: str
+    map_scores: List[str]
+
+
+@dataclass
+class Competition:
+    """Represent a single competition in a round."""
+
+    map_name: str
+    datetime: datetime
+    placements: List
+    biggest_fish: str | None = None
+
+
+@dataclass
+class Round:
+    """Represent a competition round within a season."""
+
+    number: int
+    competitions: List[Competition]
 
 
 @dataclass
 class Season:
-    year: str
-    teams: List[Team]
-    matches: List[Match]
+    """Represent a full league season composed of rounds."""
+
+    name: str
+    rounds: dict[int, Round]
