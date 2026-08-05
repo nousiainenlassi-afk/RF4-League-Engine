@@ -8,6 +8,8 @@ from ..logger import get_logger
 from ..models import CompetitionResult, Match, Player, Round, Season
 from ..parser import PointsTableParser
 from ..scheduler import ScheduleLoader
+from .map_builder import MapBuilder
+from .match_solver import MatchSolver
 from .selector import TeamSelector
 from .solver import RankingSolver
 
@@ -30,6 +32,8 @@ class RoundGenerator:
         self.formatter = formatter
         self.ranking_solver = ranking_solver
         self.team_selector = team_selector
+        self.map_builder = MapBuilder()
+        self.match_solver = MatchSolver()
 
     def generate_round(self, season: str, round_number: int, points_path: Path | str) -> str:
         """Generate formatted output for a season round.
@@ -49,6 +53,7 @@ class RoundGenerator:
         season_model = self._load_schedule(season)
         round_model = self._get_round(season_model, round_number)
         players = self._load_players(points_path)
+        map_players = self.map_builder.build(players)
 
         _logger.info(
             "Generating round %d for season %s with %d players.",
@@ -57,23 +62,20 @@ class RoundGenerator:
             len(players),
         )
 
+        _logger.debug("Built map player lists for round %d: %s", round_number, list(map_players.keys()))
+
         competition_texts: List[str] = []
         for match in round_model.matches:
             _logger.info(
-                "Processing match: %s vs %s", match.home_team, match.away_team
+                "Solving match: %s vs %s", match.home_team, match.away_team
             )
-            home_players = self.team_selector.select_players(players, match.home_team)
-            away_players = self.team_selector.select_players(players, match.away_team)
-            results = self.ranking_solver.solve_match(home_players, away_players)
+            selected_players = [
+                *self.team_selector.select_players(players, match.home_team),
+                *self.team_selector.select_players(players, match.away_team),
+            ]
+            solved_match = self.match_solver.solve(match, selected_players)
 
-            _logger.debug(
-                "Ranked %d players for match: %s vs %s.",
-                len(results),
-                match.home_team,
-                match.away_team,
-            )
-
-            competition_texts.extend(self._format_match_competitions(match, results))
+            competition_texts.extend(self._format_match_competitions(solved_match))
 
         return "\n\n".join(competition_texts)
 
@@ -85,7 +87,7 @@ class RoundGenerator:
         _logger.debug("Loading players from points path %s", points_path)
         return self.points_parser.parse(points_path)
 
-    def _format_match_competitions(self, match: Match, results: List[CompetitionResult]) -> List[str]:
+    def _format_match_competitions(self, match: Match) -> List[str]:
         texts: List[str] = []
         for competition_schedule in match.competitions:
             _logger.debug(
@@ -98,7 +100,7 @@ class RoundGenerator:
                 self.formatter.format_competition(
                     map_name=competition_schedule.map_name,
                     start_time=competition_schedule.start_time,
-                    results=results,
+                    results=competition_schedule.results,
                     biggest_fish=None,
                 )
             )
