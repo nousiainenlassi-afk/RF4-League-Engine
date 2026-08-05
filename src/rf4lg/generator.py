@@ -5,7 +5,7 @@ from typing import Dict, List
 
 from .formatter import RF4Formatter
 from .logger import get_logger
-from .models import Competition, CompetitionResult, Match, Player, Round, Season
+from .models import CompetitionResult, Match, Player, Round, Season
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
 from .solver import RankingSolver
