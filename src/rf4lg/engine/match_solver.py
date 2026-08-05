@@ -2,43 +2,51 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
 
-from ..models import Competition, CompetitionResult, Player
+from ..models import Competition, Match, Player
 from .map_solver import MapSolver
 
 
 @dataclass(frozen=True)
 class MatchSolver:
-    """Solve a single RF4 match consisting of three competition maps."""
+    """Solve a single RF4 match by generating three map competitions."""
 
     map_solver: MapSolver = field(default_factory=MapSolver)
 
-    def solve_match(
-        self,
-        home_players: List[Player],
-        away_players: List[Player],
-    ) -> List[Competition]:
-        """Solve a match through map 1, map 2 and map 3.
+    def solve(self, match: Match, players: list[Player]) -> Match:
+        """Solve a match by splitting players by team and producing three competitions.
 
         Args:
-            home_players: Players available for the home team.
-            away_players: Players available for the away team.
+            match: The match to solve.
+            players: All available players for both teams.
 
         Returns:
-            A list of three Competition objects, one for each map.
+            The updated Match instance with three Competition objects.
         """
-        competitions: List[Competition] = []
-        for map_number in range(1, 4):
-            results: List[CompetitionResult] = self.map_solver.solve_map(
-                home_players, away_players
-            )
-            competitions.append(
-                Competition(
-                    map_name=f"Map {map_number}",
-                    start_time=datetime.min,
-                    results=results,
-                )
-            )
+        home_players, away_players = self._split_players_by_team(players, match.home_team, match.away_team)
 
-        return competitions
+        competitions = [
+            self.map_solver.solve(home_players, away_players, f"Map {map_number}")
+            for map_number in range(1, 4)
+        ]
+
+        match.competitions = competitions
+        return match
+
+    def _split_players_by_team(
+        self,
+        players: list[Player],
+        home_team: str,
+        away_team: str,
+    ) -> tuple[list[Player], list[Player]]:
+        """Split all players into home and away teams."""
+        home_players: list[Player] = []
+        away_players: list[Player] = []
+
+        for player in players:
+            if player.team == home_team:
+                home_players.append(player)
+            elif player.team == away_team:
+                away_players.append(player)
+
+        return home_players, away_players
