@@ -32,8 +32,7 @@ class RoundGenerator:
         """Generate formatted output for a season round.
 
         The method loads the schedule and points table, groups players by team,
-        uses RankingSolver to rank each match, and returns a complete formatted
-        RF4 competition log for the requested round.
+        ranks each match via RankingSolver, and formats the resulting competitions.
 
         Args:
             season: Season identifier matching the schedule directory.
@@ -43,49 +42,76 @@ class RoundGenerator:
         Returns:
             Generated competition text for the requested round.
         """
-        season_model = self.schedule_loader.load(season)
+        season_model = self._load_schedule(season)
         round_model = self._get_round(season_model, round_number)
-        players = self.points_parser.parse(points_path)
+        players = self._load_players(points_path)
         players_by_team = self._group_players_by_team(players)
 
-        _logger.debug(
-            "Loaded schedule for season %s round %d and %d players from points table.",
-            season,
+        _logger.info(
+            "Generating round %d for season %s with %d players.",
             round_number,
+            season,
             len(players),
         )
 
-        competitions_text: List[str] = []
+        competition_texts: List[str] = []
         for match in round_model.matches:
+            _logger.info(
+                "Processing match: %s vs %s", match.home_team, match.away_team
+            )
             home_players = players_by_team.get(match.home_team, [])
             away_players = players_by_team.get(match.away_team, [])
+            results = self.ranking_solver.solve_match(home_players, away_players)
 
             _logger.debug(
-                "Building results for match %s vs %s with %d home and %d away players.",
+                "Ranked %d players for match: %s vs %s.",
+                len(results),
                 match.home_team,
                 match.away_team,
-                len(home_players),
-                len(away_players),
             )
 
-            results = self.ranking_solver.solve_match(home_players, away_players)
-            for competition_schedule in match.competitions:
-                competitions_text.append(
-                    self.formatter.format_competition(
-                        map_name=competition_schedule.map_name,
-                        start_time=competition_schedule.start_time,
-                        results=results,
-                        biggest_fish=None,
-                    )
-                )
+            competition_texts.extend(
+                self._format_match_competitions(match, results)
+            )
 
-        return "\n\n".join(competitions_text)
+        return "\n\n".join(competition_texts)
+
+    def _load_schedule(self, season: str) -> Season:
+        """Load the season schedule from the ScheduleLoader."""
+        _logger.debug("Loading schedule for season %s", season)
+        return self.schedule_loader.load(season)
+
+    def _load_players(self, points_path: Path | str) -> List[Player]:
+        """Load player data from the points table CSV."""
+        _logger.debug("Loading players from points path %s", points_path)
+        return self.points_parser.parse(points_path)
+
+    def _format_match_competitions(self, match: Match, results: List[CompetitionResult]) -> List[str]:
+        """Format all competitions for a given match."""
+        texts: List[str] = []
+        for competition_schedule in match.competitions:
+            _logger.debug(
+                "Formatting competition %s for match %s vs %s.",
+                competition_schedule.map_name,
+                match.home_team,
+                match.away_team,
+            )
+            texts.append(
+                self.formatter.format_competition(
+                    map_name=competition_schedule.map_name,
+                    start_time=competition_schedule.start_time,
+                    results=results,
+                    biggest_fish=None,
+                )
+            )
+        return texts
 
     def _group_players_by_team(self, players: List[Player]) -> Dict[str, List[Player]]:
         """Group parsed players by their team name."""
         grouped: Dict[str, List[Player]] = {}
         for player in players:
             grouped.setdefault(player.team, []).append(player)
+        _logger.debug("Grouped players by team: %s", list(grouped.keys()))
         return grouped
 
     def _get_round(self, season_model: Season, round_number: int) -> Round:
