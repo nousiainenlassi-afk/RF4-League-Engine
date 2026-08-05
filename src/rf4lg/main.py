@@ -5,14 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 from .config import Config
+from .engine import MatchSolver
 from .formatter import RF4Formatter
 from .io import OutputWriter
 from .logger import get_logger
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
-from .solver import RankingSolver
-from .team_selector import TeamSelector
-from .generator import RoundGenerator
 
 _logger = get_logger(__name__)
 
@@ -25,13 +23,15 @@ class Main:
         config: Config,
         parser: PointsTableParser,
         schedule_loader: ScheduleLoader,
-        round_generator: RoundGenerator,
+        match_solver: MatchSolver,
+        formatter: RF4Formatter,
         output_writer: OutputWriter,
     ) -> None:
         self.config = config
         self.parser = parser
         self.schedule_loader = schedule_loader
-        self.round_generator = round_generator
+        self.match_solver = match_solver
+        self.formatter = formatter
         self.output_writer = output_writer
 
     def run(self, season: str, round_number: int, points_path: Path) -> int:
@@ -48,7 +48,22 @@ class Main:
         self._validate_round(round_number)
         self._validate_points_path(points_path)
 
-        output_text = self.round_generator.generate_round(season, round_number, points_path)
+        schedule = self.schedule_loader.load(season)
+        round_model = schedule.rounds[round_number]
+        players = self.parser.parse(points_path)
+        match = self.match_solver.solve(round_model.matches[0], players)
+
+        competition_texts = [
+            self.formatter.format_competition(
+                map_name=competition.map_name,
+                start_time=competition.start_time,
+                results=competition.results,
+                biggest_fish=None,
+            )
+            for competition in match.competitions
+        ]
+
+        output_text = "\n\n".join(competition_texts)
         output_file = self.output_writer.write_round(round_number, output_text, Path("output"))
 
         _logger.info("Generation successful. Output file: %s", output_file)
@@ -82,23 +97,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     config = Config()
     points_parser = PointsTableParser()
     schedule_loader = ScheduleLoader()
+    match_solver = MatchSolver()
     formatter = RF4Formatter()
-    ranking_solver = RankingSolver()
-    team_selector = TeamSelector()
-    round_generator = RoundGenerator(
-        schedule_loader=schedule_loader,
-        points_parser=points_parser,
-        formatter=formatter,
-        ranking_solver=ranking_solver,
-        team_selector=team_selector,
-    )
     output_writer = OutputWriter()
 
     app = Main(
         config=config,
         parser=points_parser,
         schedule_loader=schedule_loader,
-        round_generator=round_generator,
+        match_solver=match_solver,
+        formatter=formatter,
         output_writer=output_writer,
     )
     return app.run(args.season, args.round, Path(args.points))
