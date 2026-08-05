@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 from .config import Config
+from .formatter import RF4Formatter
 from .logger import get_logger
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
+from .solver import RankingSolver
+from .generator import RoundGenerator
 
 _logger = get_logger(__name__)
 
@@ -15,10 +18,17 @@ _logger = get_logger(__name__)
 class Main:
     """Command line application for loading RF4 league schedules and points."""
 
-    def __init__(self, config: Config, parser: PointsTableParser, schedule_loader: ScheduleLoader) -> None:
+    def __init__(
+        self,
+        config: Config,
+        parser: PointsTableParser,
+        schedule_loader: ScheduleLoader,
+        round_generator: RoundGenerator,
+    ) -> None:
         self.config = config
         self.parser = parser
         self.schedule_loader = schedule_loader
+        self.round_generator = round_generator
 
     def run(self, season: str, round_number: int, points_path: Path) -> int:
         """Execute the main application logic.
@@ -34,15 +44,14 @@ class Main:
         self._validate_round(round_number)
         self._validate_points_path(points_path)
 
-        self.schedule_loader.load(season)
-        _logger.info("Season loaded")
+        output_text = self.round_generator.generate_round(season, round_number, points_path)
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        _ = round_number
-        _logger.info("Round loaded")
+        output_file = output_dir / f"Kierros{round_number:02d}.txt"
+        output_file.write_text(output_text, encoding="utf-8")
 
-        self.parser.parse(points_path)
-        _logger.info("Points loaded")
-
+        _logger.info("Round generated successfully.")
         return 0
 
     def _validate_round(self, round_number: int) -> None:
@@ -73,8 +82,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     config = Config()
     points_parser = PointsTableParser()
     schedule_loader = ScheduleLoader()
+    formatter = RF4Formatter()
+    ranking_solver = RankingSolver()
+    round_generator = RoundGenerator(
+        schedule_loader=schedule_loader,
+        points_parser=points_parser,
+        formatter=formatter,
+        ranking_solver=ranking_solver,
+    )
 
-    app = Main(config=config, parser=points_parser, schedule_loader=schedule_loader)
+    app = Main(
+        config=config,
+        parser=points_parser,
+        schedule_loader=schedule_loader,
+        round_generator=round_generator,
+    )
     return app.run(args.season, args.round, Path(args.points))
 
 
