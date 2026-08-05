@@ -6,6 +6,7 @@ from typing import Optional
 
 from .config import Config
 from .formatter import RF4Formatter
+from .io import OutputWriter
 from .logger import get_logger
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
@@ -24,11 +25,13 @@ class Main:
         parser: PointsTableParser,
         schedule_loader: ScheduleLoader,
         round_generator: RoundGenerator,
+        output_writer: OutputWriter,
     ) -> None:
         self.config = config
         self.parser = parser
         self.schedule_loader = schedule_loader
         self.round_generator = round_generator
+        self.output_writer = output_writer
 
     def run(self, season: str, round_number: int, points_path: Path) -> int:
         """Execute the main application logic.
@@ -45,13 +48,9 @@ class Main:
         self._validate_points_path(points_path)
 
         output_text = self.round_generator.generate_round(season, round_number, points_path)
-        output_dir = Path("output")
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = self.output_writer.write_round(round_number, output_text, Path("output"))
 
-        output_file = output_dir / f"Kierros{round_number:02d}.txt"
-        output_file.write_text(output_text, encoding="utf-8")
-
-        _logger.info("Round generated successfully.")
+        _logger.info("Round generated successfully: %s", output_file)
         return 0
 
     def _validate_round(self, round_number: int) -> None:
@@ -90,12 +89,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         formatter=formatter,
         ranking_solver=ranking_solver,
     )
+    output_writer = OutputWriter()
 
     app = Main(
         config=config,
         parser=points_parser,
         schedule_loader=schedule_loader,
         round_generator=round_generator,
+        output_writer=output_writer,
     )
     return app.run(args.season, args.round, Path(args.points))
 
