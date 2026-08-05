@@ -1,30 +1,26 @@
-"""Formatting helpers for RF4 League Engine."""
+"""Formatting utilities for RF4 League Engine."""
 
-from pathlib import Path
-from typing import Sequence
+from datetime import datetime
+from typing import List
 
-from .models import Match, Season
-
-
-def format_season_summary(season: Season) -> str:
-    """Return a formatted summary of the season."""
-    lines = [f"Season: {season.year}", f"Teams: {len(season.teams)}", "Matches:"]
-    for match in season.matches:
-        lines.append(format_match(match))
-    return "\n".join(lines)
+from .models import CompetitionResult
 
 
-def format_match(match: Match) -> str:
-    """Format a single match into a human-readable string."""
-    return (
-        f"{match.date.isoformat()} | {match.home_team.name} vs {match.away_team.name}"
-        f" | Venue: {match.venue}"
-    )
+class RF4Formatter:
+    """Format RF4 competition and result messages."""
 
+    def format_competition_start(self, map_name: str, start_time: datetime) -> str:
+        """Format the start notification for a competition."""
+        timestamp = start_time.strftime("%d.%m.%Y %H:%M")
+        return f"New LAN CLIENT competition started: {map_name}. [{timestamp}]"
 
-def write_summary(summary: str, output_path: Path | str) -> Path:
-    """Write formatted summary text to a file."""
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(summary, encoding="utf-8")
-    return path
+    def format_results(self, results: List[CompetitionResult]) -> str:
+        """Format competition results into a ranked text block."""
+        lines = ["Competition finished. Results:"]
+        for index, result in enumerate(results, start=1):
+            lines.append(f"{index}. [{result.player.team}] {result.player.name}")
+        return "\n".join(lines)
+
+    def format_biggest_fish(self, player_name: str) -> str:
+        """Format the biggest fish announcement."""
+        return f"Biggest fish:\n{player_name}"
