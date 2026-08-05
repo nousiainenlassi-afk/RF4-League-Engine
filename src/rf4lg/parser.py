@@ -1,9 +1,8 @@
 """Parsing utilities for RF4 League Engine."""
 
 import csv
-import logging
 from pathlib import Path
-from typing import Iterable, Iterator, List
+from typing import Iterable
 
 from .logger import setup_logger
 from .models import Player
@@ -13,25 +12,26 @@ _logger = setup_logger(__name__)
 
 
 class PointsTableParser:
-    """Parse points table CSV files into league player models."""
+    """Parse points table CSV files into Player objects."""
 
-    REQUIRED_COLUMNS = ["team", "name", "map_points"]
+    REQUIRED_COLUMNS = ["Team", "Player", "Pts"]
 
     def parse(self, file_path: Path | str) -> list[Player]:
         """Read a CSV points table and return a list of Player objects.
 
-        The parser automatically detects UTF-8 or CP1252 encoding, validates
-        required columns, and ignores empty rows.
+        The parser detects UTF-8 or CP1252 encoding automatically, validates
+        that required columns exist, ignores completely empty rows, and returns
+        a list of Player objects.
 
         Args:
-            file_path: Path to the CSV file to parse.
+            file_path: The CSV file path to parse.
 
         Returns:
-            List of Player objects parsed from the file.
+            A list of Player objects parsed from the CSV file.
 
         Raises:
             FileNotFoundError: If the file does not exist.
-            ValueError: If required CSV columns are missing or row data is invalid.
+            ValueError: If required columns are missing or row values are invalid.
             UnicodeDecodeError: If the file cannot be decoded as UTF-8 or CP1252.
         """
         path = Path(file_path)
@@ -39,66 +39,71 @@ class PointsTableParser:
             raise FileNotFoundError(f"Points table file not found: {path}")
 
         encoding = self._detect_encoding(path)
-        _logger.debug("Parsing points table %s using encoding %s", path, encoding)
+        _logger.debug("Detected encoding %s for points table %s", encoding, path)
 
-        with path.open("r", encoding=encoding, newline="") as handle:
-            reader = csv.DictReader(handle)
+        with path.open("r", encoding=encoding, newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
             self._validate_headers(reader.fieldnames, path)
-            return [self._parse_row(row, index + 1) for index, row in enumerate(reader) if self._is_non_empty_row(row)]
+            players: list[Player] = []
+            for row_index, raw_row in enumerate(reader, start=2):
+                if self._is_empty_row(raw_row):
+                    continue
+                players.append(self._parse_row(raw_row, row_index, path))
+
+        return players
 
     def _detect_encoding(self, path: Path) -> str:
-        """Detect whether a CSV file is encoded as UTF-8 or CP1252."""
+        """Detect whether the file is UTF-8 or CP1252 encoded."""
         raw_bytes = path.read_bytes()
         try:
             raw_bytes.decode("utf-8")
             return "utf-8"
         except UnicodeDecodeError:
-            try:
-                raw_bytes.decode("cp1252")
-                return "cp1252"
-            except UnicodeDecodeError as exc:
-                raise UnicodeDecodeError(
-                    "utf-8 or cp1252",
-                    exc.object,
-                    exc.start,
-                    exc.end,
-                    "Unable to decode file as UTF-8 or CP1252",
-                ) from exc
+            raw_bytes.decode("cp1252")
+            return "cp1252"
 
     def _validate_headers(self, headers: Iterable[str] | None, path: Path) -> None:
-        """Validate that required CSV headers are present."""
+        """Validate that required CSV columns exist in the file."""
         if headers is None:
             raise ValueError(f"CSV file {path} has no header row.")
 
-        missing = [column for column in self.REQUIRED_COLUMNS if column not in headers]
-        if missing:
+        normalized_headers = [header.strip() for header in headers if header is not None]
+        missing_columns = [column for column in self.REQUIRED_COLUMNS if column not in normalized_headers]
+        if missing_columns:
             raise ValueError(
-                f"CSV file {path} is missing required columns: {', '.join(missing)}"
+                f"CSV file {path} is missing required columns: {', '.join(missing_columns)}"
             )
 
-    def _is_non_empty_row(self, row: dict[str, str]) -> bool:
-        """Return True if the CSV row contains any non-empty values."""
-        return any(value.strip() for value in row.values() if value is not None)
+    def _is_empty_row(self, row: dict[str, str | None]) -> bool:
+        """Return True if all values in the CSV row are empty or missing."""
+        return not any((value or "").strip() for value in row.values())
 
-    def _parse_row(self, row: dict[str, str], row_number: int) -> Player:
-        """Convert a CSV row into a Player model."""
+    def _parse_row(self, row: dict[str, str | None], row_number: int, path: Path) -> Player:
+        """Convert a CSV row into a Player object."""
         try:
-            team = row["team"].strip()
-            name = row["name"].strip()
-            map_points_value = row["map_points"].strip()
+            team_value = row["Team"]
+            player_value = row["Player"]
+            pts_value = row["Pts"]
         except KeyError as exc:
-            raise ValueError(f"Missing required column in row {row_number}: {exc}") from exc
-
-        if not team:
-            raise ValueError(f"Empty team value in row {row_number}.")
-        if not name:
-            raise ValueError(f"Empty player name in row {row_number}.")
-
-        try:
-            map_points = [int(value.strip()) for value in map_points_value.split(";") if value.strip()]
-        except ValueError as exc:
             raise ValueError(
-                f"Invalid map_points format in row {row_number}: {map_points_value}."
+                f"CSV file {path} is missing required column {exc.args[0]} in row {row_number}."
             ) from exc
 
-        return Player(team=team, name=name, map_points=map_points)
+        if team_value is None or not team_value.strip():
+            raise ValueError(f"Empty Team value in row {row_number} of file {path}.")
+        if player_value is None or not player_value.strip():
+            raise ValueError(f"Empty Player value in row {row_number} of file {path}.")
+        if pts_value is None or not pts_value.strip():
+            raise ValueError(f"Empty Pts value in row {row_number} of file {path}.")
+
+        team = team_value.strip()
+        name = player_value.strip()
+
+        try:
+            total_points = int(pts_value.strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid Pts value in row {row_number} of file {path}: {pts_value!r}"
+            ) from exc
+
+        return Player(team=team, name=name, total_points=total_points, map_points=[])

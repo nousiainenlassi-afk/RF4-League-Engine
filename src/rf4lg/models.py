@@ -1,6 +1,6 @@
 """Domain models for RF4 League Engine."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -10,7 +10,8 @@ class Player:
 
     team: str
     name: str
-    map_points: list[int]
+    total_points: int
+    map_points: list[int] = field(default_factory=list)
 
 
 @dataclass
