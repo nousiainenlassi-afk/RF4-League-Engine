@@ -20,6 +20,7 @@ class CompetitionResult:
 
     position: int
     player: Player
+    team: str
     biggest_fish: bool = False
 
 

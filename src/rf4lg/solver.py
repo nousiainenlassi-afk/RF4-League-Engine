@@ -32,12 +32,16 @@ class RankingSolver:
         selected_home = sorted(home_players, key=lambda player: player.total_points, reverse=True)[:8]
         selected_away = sorted(away_players, key=lambda player: player.total_points, reverse=True)[:8]
 
-        combined: List[Player] = selected_home + selected_away
-        ranked = sorted(combined, key=lambda player: player.total_points, reverse=True)
+        combined: List[tuple[Player, str]] = [
+            (player, "home") for player in selected_home
+        ] + [
+            (player, "away") for player in selected_away
+        ]
+        ranked = sorted(combined, key=lambda item: item[0].total_points, reverse=True)
 
         results: List[CompetitionResult] = [
-            CompetitionResult(position=index + 1, player=player)
-            for index, player in enumerate(ranked[:16])
+            CompetitionResult(position=index + 1, player=player, team=team)
+            for index, (player, team) in enumerate(ranked[:16])
         ]
 
         if len(results) < 16:
