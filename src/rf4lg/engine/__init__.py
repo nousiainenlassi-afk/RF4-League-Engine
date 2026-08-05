@@ -2,6 +2,7 @@
 
 from .match import MatchPoints
 from .map_solver import MapSolver
+from .match_solver import MatchSolver
 from .round import RoundGenerator
 from .selector import TeamSelector
 from .solver import RankingSolver
@@ -9,6 +10,7 @@ from .solver import RankingSolver
 __all__ = [
     "MatchPoints",
     "MapSolver",
+    "MatchSolver",
     "RoundGenerator",
     "TeamSelector",
     "RankingSolver",
