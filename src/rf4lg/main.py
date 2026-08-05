@@ -11,6 +11,7 @@ from .logger import get_logger
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
 from .solver import RankingSolver
+from .team_selector import TeamSelector
 from .generator import RoundGenerator
 
 _logger = get_logger(__name__)
@@ -83,11 +84,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     schedule_loader = ScheduleLoader()
     formatter = RF4Formatter()
     ranking_solver = RankingSolver()
+    team_selector = TeamSelector()
     round_generator = RoundGenerator(
         schedule_loader=schedule_loader,
         points_parser=points_parser,
         formatter=formatter,
         ranking_solver=ranking_solver,
+        team_selector=team_selector,
     )
     output_writer = OutputWriter()
 

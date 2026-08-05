@@ -9,6 +9,7 @@ from .models import CompetitionResult, Match, Player, Round, Season
 from .parser import PointsTableParser
 from .scheduler import ScheduleLoader
 from .solver import RankingSolver
+from .team_selector import TeamSelector
 
 _logger = get_logger(__name__)
 
@@ -22,16 +23,18 @@ class RoundGenerator:
         points_parser: PointsTableParser,
         formatter: RF4Formatter,
         ranking_solver: RankingSolver,
+        team_selector: TeamSelector,
     ) -> None:
         self.schedule_loader = schedule_loader
         self.points_parser = points_parser
         self.formatter = formatter
         self.ranking_solver = ranking_solver
+        self.team_selector = team_selector
 
     def generate_round(self, season: str, round_number: int, points_path: Path | str) -> str:
         """Generate formatted output for a season round.
 
-        The method loads the schedule and points table, groups players by team,
+        The method loads the schedule and points table, selects players per team,
         ranks each match via RankingSolver, and formats the resulting competitions.
 
         Args:
@@ -45,7 +48,6 @@ class RoundGenerator:
         season_model = self._load_schedule(season)
         round_model = self._get_round(season_model, round_number)
         players = self._load_players(points_path)
-        players_by_team = self._group_players_by_team(players)
 
         _logger.info(
             "Generating round %d for season %s with %d players.",
@@ -59,8 +61,8 @@ class RoundGenerator:
             _logger.info(
                 "Processing match: %s vs %s", match.home_team, match.away_team
             )
-            home_players = players_by_team.get(match.home_team, [])
-            away_players = players_by_team.get(match.away_team, [])
+            home_players = self.team_selector.select_players(players, match.home_team)
+            away_players = self.team_selector.select_players(players, match.away_team)
             results = self.ranking_solver.solve_match(home_players, away_players)
 
             _logger.debug(
