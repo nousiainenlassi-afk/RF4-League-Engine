@@ -50,7 +50,7 @@ class Main:
         output_text = self.round_generator.generate_round(season, round_number, points_path)
         output_file = self.output_writer.write_round(round_number, output_text, Path("output"))
 
-        _logger.info("Round generated successfully: %s", output_file)
+        _logger.info("Generation successful. Output file: %s", output_file)
         return 0
 
     def _validate_round(self, round_number: int) -> None:
